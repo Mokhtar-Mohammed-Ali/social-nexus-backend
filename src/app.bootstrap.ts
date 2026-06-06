@@ -1,13 +1,20 @@
+import { successResponse } from "./common/response/success.response";
 // import { globalErrorHandling, sendEmail } from "./common/utils/index.js";
 // import { redisConnection, connectionDB, redisClient } from "./DB/index.js";
 import express from "express";
 import type { Express, Request, Response } from "express";
 import cors from "cors";
-import { authRouter,UserRouter } from "./modules";
+import { authRouter, postRouter, schema, UserRouter } from "./modules";
 import globalErrorHandler from "./middlware/error.middleware";
 import { port } from "./config/config.service";
 import { connectionDB } from "./DB/connection.db";
-import { redisServices } from "./common/services";
+import { redisServices, s3Service } from "./common/services";
+import { pipeline } from "node:stream";
+import { promisify } from "node:util";
+import accountCleanupJob from "./common/jobs/account-cleanup.job";
+import { commentRouter } from "./modules/comment";
+import { createHandler } from "graphql-http/lib/use/express";
+import { authentication } from "./middlware";
 // import { globalErrorHandling } from "./middlware";
 // import { resolve } from "path";
 // import helmet from "helmet";
@@ -17,6 +24,7 @@ import { redisServices } from "./common/services";
 // import morgan from "morgan";
 
 async function bootstrap(): Promise<void> {
+  const s3writable = promisify(pipeline);
   const app: Express = express();
   //convert buffer data and origins
   //   const corsOptions = () => {
@@ -109,12 +117,88 @@ async function bootstrap(): Promise<void> {
   await connectionDB();
   await redisServices.connect();
 
+
+  //test notif
+
   //application routing
-  app.get("/", (req: Request, res: Response) => {
-    res.send("Hello World!");
-  });
+  // app.post("/send-notification",async (req: Request, res: Response) :Promise<express.Response>=> {
+  //   console.log("Hello notification!");
+  //   await notificationService.sendNotification({
+  //     token: req.body.token,
+  //     data: {
+  //       title: "Test Notification",
+  //       body: "This is a test notification sent from the server.",
+  //     },
+  //   });
+  //   return successResponse({ res, message: "Notification sent successfully" });
+  // });
+
+// check if route is right or not
+app.all("/graphql", authentication(),createHandler({schema:schema,context:(req)=>({user:req.raw.user,decoded:req.raw.decoded})}))
+app.use((req, res, next) => {
+  console.log(`Incoming request: ${req.method} ${req.url}`);
+  next();
+});
+
+
+    app.use("/post/:postId/comments", commentRouter);
   app.use("/auth", authRouter);
   app.use("/user", UserRouter);
+  app.use("/post", postRouter);
+
+  // get file from s3 and download it or view it in the browser
+  app.get(
+    "/upoads/*path",
+    async (
+      req: express.Request,
+      res: express.Response,
+      next: express.NextFunction,
+    ) => {
+      const { download, fileName } = req.query as {
+        download?: string;
+        fileName?: string;
+      };
+      const { path } = req.params as { path: string[] };
+      const Key = path.join("/");
+      const { Body, ContentType } = await s3Service.getAsset({ Key });
+      console.log({ Body, ContentType });
+
+      res.setHeader("Content-Type", ContentType || "application/octet-stream");
+      res.set("Cross-Origin-Resource-Policy", "cross-origin");
+      if (download === "true") {
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${fileName || Key.split("/").pop()}"`,
+        ); // only apply it for  download
+      }
+      return await s3writable(Body as NodeJS.ReadableStream, res);
+      //  return successResponse({res,data:{params:req.params,Key,{Body,ContentType}}})
+    },
+  );
+  // get file from s3 and download it by presigned url
+  app.get(
+    "/presigned/*path",
+    async (
+      req: express.Request,
+      res: express.Response,
+      next: express.NextFunction,
+    ) => {
+      const { download, fileName } = req.query as {
+        download?: string;
+        fileName?: string;
+      };
+      const { path } = req.params as { path: string[] };
+      const Key = path.join("/");
+      const url = await s3Service.getPresignedUploadLink({
+        Key,
+        download,
+        fileName,
+      });
+      return successResponse({ res, data: { url } });
+    },
+  );
+// cleanup account job
+accountCleanupJob.start();
   // app.use("/message", messageRouter);
 
   //invalid routing

@@ -7,6 +7,7 @@ exports.loginValidation = {
     body: zod_1.z.strictObject({
         email: utils_1.generalValidationFields.email,
         password: utils_1.generalValidationFields.password,
+        Fcm: zod_1.z.string().optional()
     })
 };
 exports.signupValidation = {

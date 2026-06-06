@@ -8,14 +8,19 @@ const enums_1 = require("../../common/enums");
 const utils_1 = require("../../common/utils");
 const config_service_1 = require("../../config/config.service");
 const google_auth_library_1 = require("google-auth-library");
+const notification_repository_1 = require("../../DB/DataBaseRepository/notification.repository");
 class AuthService {
     userRepository;
+    notificationRepository;
     redis;
     tokenService;
+    notificationService;
     constructor() {
         this.userRepository = new DB_1.userRepository();
+        this.notificationRepository = new notification_repository_1.NotificationRepository();
         this.redis = services_1.redisServices;
         this.tokenService = new services_1.TokenService();
+        this.notificationService = new services_1.NotificationService();
     }
     async senEmailOtp({ email, subject, title, }) {
         const isBlocked = await this.redis.ttl(this.redis.blockAttemptOtpKey({ email, subject }));
@@ -117,7 +122,7 @@ class AuthService {
         return user.toJSON();
     }
     async login(inputs, issuer) {
-        const { email, password } = inputs;
+        const { email, password, Fcm } = inputs;
         const isBlockedSeconds = await this.redis.ttl(this.redis.loginBlockKey({ email }));
         if (isBlockedSeconds > 0) {
             throw new exptions_1.BadRequestExpetions(`{Account blocked. Try again after ${Math.ceil(isBlockedSeconds / 60)} minutes.}`);
@@ -142,6 +147,29 @@ class AuthService {
                 subject: enums_1.emailEnum.forgot_Bassword,
                 title: "Login OTP",
             });
+        }
+        if (Fcm) {
+            await this.redis.addFCM(user._id, Fcm);
+            const tokens = await this.redis.getFCMs(user._id);
+            if (tokens.length) {
+                await this.notificationService.sendNotifications({
+                    tokens,
+                    data: {
+                        title: "Login Notification",
+                        body: "You have successfully logged in to your account.",
+                    },
+                });
+                await this.notificationRepository.create({
+                    data: {
+                        title: "Login Notification",
+                        body: "You have successfully logged in to your account.",
+                        sender: user._id,
+                        receiver: user._id,
+                        type: "SYSTEM",
+                        isRead: false,
+                    },
+                });
+            }
         }
         return await this.tokenService.createloginCredentials(user, issuer);
     }

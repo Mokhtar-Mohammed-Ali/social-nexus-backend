@@ -1,6 +1,9 @@
+import { Types } from "mongoose";
 import { z } from "zod";
 
 export const generalValidationFields = {
+  id: z.string().refine((val) => Types.ObjectId.isValid(val),"Invalid ObjectId format"),
+   
   email: z.email(),
   password: z
     .string({ error: "Password must be at least 8 characters" })
@@ -16,4 +19,33 @@ export const generalValidationFields = {
   otp: z.string({ error: "OTP must be 6 characters" }).length(6).regex(/^\d{6}$/),
 
   confirmPassword: z.string({ error: "Confirm Password must match Password" }),
+  file: function (mimetype: string[]) {
+  return z
+    .strictObject({
+      fieldname: z.string(),
+      originalname: z.string(),
+      encoding: z.string(),
+      mimetype: z.enum(mimetype),
+      buffer: z.any().optional(),
+      path: z.string().optional(),
+      size: z.number(),
+    })
+    .superRefine((args, ctx) => {
+      if (!args.path && !args.buffer) {
+        ctx.addIssue({
+          code: "custom",
+          message: "buffer is required",
+          path: ["buffer"],
+        });
+      }
+    });
+}
 };
+export const paginationValidationSchema = {
+  query: z.strictObject({
+page:z.coerce.number().int().positive().default(1).optional(),
+size:z.coerce.number().int().positive().max(100).default(5).optional(),
+search:z.string().optional(),
+  })
+}
+export type paginateDto=z.infer<typeof paginationValidationSchema.query>

@@ -6,35 +6,56 @@ import { HydratedDocument } from "mongoose";
 import { IUser } from "../../common/interfaces";
 import {
   ACCESS_TOKEN_EXPIRATION,
+  // AWS_S3_BUCKET_NAME,
   REFRESH_TOKEN_EXPIRATION,
 } from "../../config/config.service";
 import {
   redisServices,
   Redisservices,
+  s3Service,
+  S3Service,
   sendEmail,
   TokenService,
   verifyEmailTemplate,
 } from "../../common/services";
 import { ConflictException } from "../../common/exptions";
-import { emailEnum, LOGOUTENUM, PROVIDERENUM } from "../../common/enums";
+import {
+  emailEnum,
+  LOGOUTENUM,
+  MulterStorage,
+  PROVIDERENUM,
+  UploadsEnum,
+} from "../../common/enums";
 import { compareHash, generateHash } from "../../common/utils/security";
 import { userRepository } from "../../DB";
 import crypto from "crypto";
 import { createNumberOtp } from "../../common/utils";
+import { Types } from "mongoose";
+import { DeleteResult } from "mongoose";
+import dayjs from "dayjs";
 
-class userService {
+export class UserService {
   private readonly redis: Redisservices;
   private readonly tokenService: TokenService;
   private readonly userRepository: userRepository;
+  private readonly s3: S3Service;
 
   constructor() {
     this.userRepository = new userRepository();
     this.redis = redisServices;
     this.tokenService = new TokenService();
+    this.s3 = s3Service;
   }
 
-  async profile(user: HydratedDocument<IUser>): Promise<any> {
-    return user.toJSON();
+  // async profile(user: HydratedDocument<IUser>): Promise<any> {
+  //   return user.toJSON();
+  // }
+  // with graphQL
+   async profile(user: HydratedDocument<IUser>): Promise<IUser> {
+//  await this.userRepository.findOne({
+
+// options:{populate:[{path:"friends"}]}})as HydratedDocument<IUser>;
+    return user.toJSON()
   }
 
   async rotateToken(
@@ -206,6 +227,134 @@ class userService {
     const tokenKeys = await this.redis.allKeys(prefix);
     if (tokenKeys.length > 0) await this.redis.deleteKey(tokenKeys);
   }
+
+  // hard delete account we not use it in controller but we can use it in admin controller if we want to delete account permanently and we can use it in delete account function if we want to give user the option to choose between soft delete and hard delete
+  async hardDeleteAccount(userId: Types.ObjectId): Promise<DeleteResult> {
+    const account = await this.userRepository.deleteOne({
+      filter: { _id: userId, force: true },
+    });
+    if (!account.deletedCount) throw new NotFoundExpetions("User not found");
+    await this.s3.deleteFolderContent({
+      prifix: `Users/${userId.toString()}`,
+    });
+    return account;
+  }
+
+  //soft delete account and cron job to delete account after 30 day and we can restore account before 30 day if user change his mind and we can use it in delete account function if we want to give user the option to choose between soft delete and hard delete
+  async deleteAccount(userId: Types.ObjectId): Promise<any> {
+    const user = await this.userRepository.findOneAndUpdate({
+      filter: { _id: userId },
+      update: {
+        deletedAt: new Date(),
+        scheduledForDeletionAt: dayjs().add(30, "day").toDate(),
+        $unset: { restoredAt: 1 },
+      },
+      options: { new: true },
+    });
+
+    if (!user) throw new NotFoundExpetions("User not found");
+
+    return user;
+  }
+
+  // restore account and cron job deleted
+  async restoreAccount(userId: Types.ObjectId): Promise<any> {
+    const user = await this.userRepository.findOneAndUpdate({
+      filter: { _id: userId },
+      update: {
+        restoredAt: new Date(),
+        $unset: { deletedAt: 1, scheduledForDeletionAt: 1 },
+      },
+      options: { new: true },
+    });
+
+    if (!user) throw new NotFoundExpetions("User not found");
+
+    return user;
+  }
+
+  // profile image upload small and large file
+  async profileImage(file: Express.Multer.File, user: HydratedDocument<IUser>) {
+    // small file
+    // user.profilePic=await this.s3.uploadAsset({
+    //   file,
+    //   path:`users/${user._id}/profile`,
+    //   // Bucket: AWS_S3_BUCKET_NAME,
+    //   storageApproache: MulterStorage.DISK,
+    // });
+    const oldImageKey = user.profilePic;
+
+    //large file
+    const { Key } = await this.s3.uploadLargeAsset({
+      file,
+      path: `users/${user._id}/profile`,
+      // Bucket: AWS_S3_BUCKET_NAME,
+      storageApproache: MulterStorage.DISK,
+      // partSize: 5
+    });
+    if (oldImageKey) {
+      await this.s3.deleteAsset({ Key: oldImageKey });
+    }
+    user.profilePic = Key as string;
+
+    await user.save();
+    return user.toJSON();
+  }
+
+  // upload profil image with presigned url
+  async profileImagePresigned(
+    {
+      ContentType,
+      originalname,
+    }: { ContentType?: string; originalname: string },
+    user: HydratedDocument<IUser>,
+  ): Promise<{ user: IUser; url: string }> {
+    // delete old image from s3 if exist and we can use it  in profile image and cover image small and large
+
+    // const oldImageKey = user.profilePic;
+    const { url } = await this.s3.PresignedUploadLink({
+      ContentType,
+      originalname,
+      path: `users/${user._id}/profile`,
+    });
+
+    // user.profilePic = key as string;
+    // await user.save();
+    //  if (oldImageKey) {
+    //   await this.s3.deleteAsset({ Key: oldImageKey });
+    // }
+    return { user, url };
+  }
+
+  // profile cover image upload
+
+  async profileCoverImage(
+    files: Express.Multer.File[],
+    user: HydratedDocument<IUser>,
+  ) {
+    const oldCoverKeys = user.profilePicCover;
+    //large file and we can use small file in cover image
+    const urls = await this.s3.uploadAssets({
+      files,
+      path: `users/${user._id}/profile/cover`,
+      // Bucket: AWS_S3_BUCKET_NAME,
+      storageApproache: MulterStorage.DISK,
+      uploadApproache: UploadsEnum.SMALL,
+
+      // partSize: 5
+    });
+    user.profilePicCover = urls;
+    await user.save();
+
+    if (oldCoverKeys?.length) {
+      await this.s3.deleteAssets({
+        Keys: oldCoverKeys.map((ele) => {
+          return { Key: ele };
+        }),
+      });
+    }
+    return user.toJSON();
+  }
 }
 
-export default new userService();
+export const userService = new UserService();

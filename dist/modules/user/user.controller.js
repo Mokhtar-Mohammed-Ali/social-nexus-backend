@@ -32,52 +32,94 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
+const validation_middleware_1 = require("./../../middlware/validation.middleware");
 const express_1 = require("express");
 const response_1 = require("../../common/response");
-const user_sevice_1 = __importDefault(require("./user.sevice"));
 const middlware_1 = require("../../middlware");
 const user_authorization_1 = require("./user.authorization");
 const enums_1 = require("../../common/enums");
-const middlware_2 = require("../../middlware");
 const validators = __importStar(require("./user.validation"));
+const multer_1 = require("../../common/utils/multer");
+const user_sevice_1 = require("./user.sevice");
 const router = (0, express_1.Router)();
 router.get("/", (0, middlware_1.authentication)(), (0, middlware_1.authorization)(user_authorization_1.endPoints.profile), async (req, res, next) => {
-    const data = await user_sevice_1.default.profile(req.user);
+    const data = await user_sevice_1.userService.profile(req.user);
     return (0, response_1.successResponse)({ res, data });
 });
 router.post("/logout", (0, middlware_1.authentication)(), async (req, res, next) => {
-    const status = await user_sevice_1.default.logout(req.body, req.user, req.decoded);
+    const status = await user_sevice_1.userService.logout(req.body, req.user, req.decoded);
     return (0, response_1.successResponse)({
         res,
         data: { status },
     });
 });
 router.post("/refresh", (0, middlware_1.authentication)(enums_1.TOKENTYPEENUM.REFRESH), async (req, res, next) => {
-    const credentials = await user_sevice_1.default.rotateToken(req.user, req.decoded, `${req.protocol}://${req.host}`);
+    const credentials = await user_sevice_1.userService.rotateToken(req.user, req.decoded, `${req.protocol}://${req.host}`);
     return (0, response_1.successResponse)({
         res,
         status: 201,
         data: { ...credentials },
     });
 });
-router.post("/forgot-password/otp", (0, middlware_2.validation)(validators.requestForgotPasswordValidation), async (req, res) => {
-    await user_sevice_1.default.requestForgotPasswordOtp(req.body.email);
+router.post("/forgot-password/otp", (0, validation_middleware_1.validation)(validators.requestForgotPasswordValidation), async (req, res) => {
+    await user_sevice_1.userService.requestForgotPasswordOtp(req.body.email);
     return (0, response_1.successResponse)({ res, message: "OTP sent successfully" });
 });
-router.patch("/reset-password/otp", (0, middlware_2.validation)(validators.resetPasswordCodeValidation), async (req, res) => {
-    await user_sevice_1.default.resetPasswordWithCode(req.body);
+router.patch("/reset-password/otp", (0, validation_middleware_1.validation)(validators.resetPasswordCodeValidation), async (req, res) => {
+    await user_sevice_1.userService.resetPasswordWithCode(req.body);
     return (0, response_1.successResponse)({ res, message: "Password updated" });
 });
-router.post("/forgot-password-link", (0, middlware_2.validation)(validators.requestForgotPasswordValidation), async (req, res) => {
-    const link = await user_sevice_1.default.requestForgotPasswordLink(req.body.email, `${req.protocol}://${req.get("host")}/user`);
+router.post("/forgot-password-link", (0, validation_middleware_1.validation)(validators.requestForgotPasswordValidation), async (req, res) => {
+    const link = await user_sevice_1.userService.requestForgotPasswordLink(req.body.email, `${req.protocol}://${req.get("host")}/user`);
     return (0, response_1.successResponse)({ res, data: { link } });
 });
-router.patch("/reset-password-link", (0, middlware_2.validation)(validators.resetPasswordLinkValidation), async (req, res) => {
-    await user_sevice_1.default.resetPasswordWithLink(req.query.token, req.body.password);
+router.patch("/reset-password-link", (0, validation_middleware_1.validation)(validators.resetPasswordLinkValidation), async (req, res) => {
+    await user_sevice_1.userService.resetPasswordWithLink(req.query.token, req.body.password);
     return (0, response_1.successResponse)({ res, message: "Password updated" });
+});
+router.delete("/hard-delete", (0, middlware_1.authentication)(), async (req, res) => {
+    const data = await user_sevice_1.userService.hardDeleteAccount(req.user._id);
+    return (0, response_1.successResponse)({
+        res,
+        message: "Account deleted successfully",
+        data,
+    });
+});
+router.delete("/", (0, middlware_1.authentication)(), async (req, res) => {
+    const data = await user_sevice_1.userService.deleteAccount(req.user._id);
+    return (0, response_1.successResponse)({
+        res,
+        message: "Account deleted successfully",
+        data,
+    });
+});
+router.patch("/restore", (0, middlware_1.authentication)(), async (req, res) => {
+    const data = await user_sevice_1.userService.restoreAccount(req.user._id);
+    return (0, response_1.successResponse)({
+        res,
+        message: "Account restored successfully",
+        data,
+    });
+});
+router.patch("/profile-image", (0, multer_1.cloudeFileUploade)({
+    storageApproache: enums_1.MulterStorage.DISK,
+    validation: multer_1.fileFieldValidation.image,
+    maxSize: 5,
+}).single("attachment"), (0, middlware_1.authentication)(), async (req, res) => {
+    const data = await user_sevice_1.userService.profileImage(req.file, req.user);
+    return (0, response_1.successResponse)({ res, data });
+});
+router.patch("/profile-image-presigned", (0, middlware_1.authentication)(), async (req, res) => {
+    const data = await user_sevice_1.userService.profileImagePresigned(req.body, req.user);
+    return (0, response_1.successResponse)({ res, data });
+});
+router.patch("/profile-cover-image", (0, multer_1.cloudeFileUploade)({
+    storageApproache: enums_1.MulterStorage.DISK,
+    validation: multer_1.fileFieldValidation.image,
+    maxSize: 5,
+}).array("attachments", 2), (0, middlware_1.authentication)(), async (req, res) => {
+    const data = await user_sevice_1.userService.profileCoverImage(req.files, req.user);
+    return (0, response_1.successResponse)({ res, data });
 });
 exports.default = router;

@@ -1,0 +1,1 @@
+export { cascadeSoftDeletePlugin } from "./cascade.plugin";

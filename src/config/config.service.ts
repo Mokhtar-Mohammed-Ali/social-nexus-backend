@@ -3,6 +3,8 @@ import { config } from "dotenv";
 
 config({ path: resolve(`./.env.${process.env.NODE_ENV}`) });
 
+
+export const APPLICATION_NAME=process.env.APPLICATION_NAME as string;
 export const port = process.env.PORT || 8000;
 export const BAS_URL = process.env.BAS_URL as string;
 
@@ -36,4 +38,10 @@ export const Instagram_LINK = process.env.Instagram_LINK as string;
 export const ALLOW_ORIGINS = process.env.ALLOW_ORIGINS ?.split(',') || [] as string[];
 console.log({ SALT_ROUND });
 
-//
+//AWS config
+export const AWS_REGION = process.env.AWS_REGION as string;
+export const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID as string;
+export const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY as string;
+export const AWS_S3_BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME as string;
+export const AWS_EXPIRATION_TIME = parseInt(process.env.AWS_EXPIRATION_TIME ?? "120");
+

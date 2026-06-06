@@ -7,3 +7,8 @@ declare module "express-serve-static-core" {
         user: HydratedDocument<IUser>;
         decoded: JwtPayload;
     }}
+
+    export interface IAuthUser{
+         user: HydratedDocument<IUser>;
+        decoded: JwtPayload;
+    }

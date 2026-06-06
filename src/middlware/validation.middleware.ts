@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
-import { BadRequestExpetions } from "../common/exptions";
+import { BadRequestExpetions, mapGeaphQLError } from "../common/exptions";
 import { ZodError, ZodType } from "zod";
+import path from "node:path";
 
 type keyType = keyof Request;
 type scchemaType = Partial<Record<keyType, ZodType>>;
@@ -18,6 +19,12 @@ export const validation = (schema: scchemaType) => {
 
     for (const key of Object.keys(schema) as keyType[]) {
       if (!schema[key]) continue;
+      if (req.file) {
+        req.body.file = req.file;
+      }
+      if (req.files) {
+        req.body.files = req.files;
+      }
       const validationResult = schema[key].safeParse(req[key]);
       if (!validationResult.success) {
         const error = validationResult.error as ZodError;
@@ -30,9 +37,24 @@ export const validation = (schema: scchemaType) => {
         });
       }
     }
+
     if (isseus.length) {
       throw new BadRequestExpetions("validation error", isseus);
     }
     next();
   };
+};
+
+export const GQLvalidation = async <T>(schema: ZodType, args: T) :Promise<boolean>=> {
+  const validationResult = schema.safeParse(args);
+  if (!validationResult.success) {
+    throw mapGeaphQLError(
+      new BadRequestExpetions("validation error", {
+        issues: validationResult.error.issues.map((issue) => {
+          return { path: issue.path, message: issue.message };
+        }),
+      }),
+    );
+  }
+  return true
 };

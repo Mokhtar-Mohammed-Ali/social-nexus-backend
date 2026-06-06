@@ -18,3 +18,5 @@ __exportStar(require("./security.service"), exports);
 __exportStar(require("./email"), exports);
 __exportStar(require("./redis.services"), exports);
 __exportStar(require("./token.service"), exports);
+__exportStar(require("./s3.service"), exports);
+__exportStar(require("./notification.service"), exports);

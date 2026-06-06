@@ -1,5 +1,14 @@
+import { GraphQLError } from "graphql";
 import { ErrorAplicationExeptions } from "./application.exptions";
-
+export const mapGeaphQLError=(error:ErrorAplicationExeptions)=>{
+throw new GraphQLError(
+  error.message||"internal server error",
+{  extensions:{
+    statusCode:error.status||500,
+    cause:error.cause
+  }}
+)
+}
 // Bad Request (400)
 export class BadRequestExpetions extends ErrorAplicationExeptions {
   constructor(message: string, cause?: unknown) {

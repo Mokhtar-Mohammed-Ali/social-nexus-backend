@@ -6,6 +6,7 @@ export const loginValidation = {
   body: z.strictObject({
     email: generalValidationFields.email,
     password: generalValidationFields.password,
+    Fcm:z.string().optional()
   })
 };
 

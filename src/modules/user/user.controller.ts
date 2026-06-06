@@ -1,12 +1,16 @@
+import { validation } from "./../../middlware/validation.middleware";
 import type { NextFunction, Request, Response } from "express";
 import { Router } from "express";
 import { successResponse } from "../../common/response";
-import userService from "./user.sevice";
 import { authentication, authorization } from "../../middlware";
 import { endPoints } from "./user.authorization";
-import { TOKENTYPEENUM } from "../../common/enums";
-import { validation } from "../../middlware";
+import { MulterStorage, TOKENTYPEENUM } from "../../common/enums";
 import * as validators from "./user.validation";
+import {
+  cloudeFileUploade,
+  fileFieldValidation,
+} from "../../common/utils/multer";
+import { userService } from "./user.sevice";
 
 const router = Router();
 // profile
@@ -50,7 +54,7 @@ router.post(
   },
 );
 
-//passport route
+//password route
 //1- request otp
 // URL: POST /user/forgot-password/otp
 router.post(
@@ -97,6 +101,89 @@ router.patch(
       req.body.password,
     );
     return successResponse({ res, message: "Password updated" });
+  },
+);
+
+// hard delete account route
+router.delete("/hard-delete", authentication(), async (req: Request, res: Response) => {
+  const data = await userService.hardDeleteAccount(req.user._id);
+
+  return successResponse({
+    res,
+    message: "Account deleted successfully",
+    data,
+  });
+});
+
+// softdelete account route
+router.delete("/", authentication(), async (req: Request, res: Response) => {
+  const data = await userService.deleteAccount(req.user._id);
+
+  return successResponse({
+    res,
+    message: "Account deleted successfully",
+    data,
+  });
+});
+//restore account route
+router.patch(
+  "/restore",
+  authentication(),
+  async (req: Request, res: Response) => {
+    const data = await userService.restoreAccount(req.user._id);
+
+    return successResponse({
+      res,
+      message: "Account restored successfully",
+      data,
+    });
+  },
+);
+//user profile image route
+router.patch(
+  "/profile-image",
+  cloudeFileUploade({
+    storageApproache: MulterStorage.DISK,
+    validation: fileFieldValidation.image,
+    maxSize: 5,
+  }).single("attachment"),
+  authentication(),
+  async (req: Request, res: Response) => {
+    const data = await userService.profileImage(
+      req.file as Express.Multer.File,
+      req.user,
+    );
+    return successResponse({ res, data });
+  },
+);
+
+//upload profile image with presigned url
+router.patch(
+  "/profile-image-presigned",
+ 
+  authentication(),
+  async (req: Request, res: Response) => {
+    const data = await userService.profileImagePresigned(req.body, req.user);
+    return successResponse({ res, data });
+  },
+);
+
+// profile cover route
+
+router.patch(
+  "/profile-cover-image",
+  cloudeFileUploade({
+    storageApproache: MulterStorage.DISK,
+    validation: fileFieldValidation.image,
+    maxSize: 5,
+  }).array("attachments", 2),
+  authentication(),
+  async (req: Request, res: Response) => {
+    const data = await userService.profileCoverImage(
+      req.files as Express.Multer.File[],
+      req.user,
+    );
+    return successResponse({ res, data });
   },
 );
 

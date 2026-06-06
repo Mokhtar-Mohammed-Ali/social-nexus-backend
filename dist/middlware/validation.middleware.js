@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.validation = void 0;
+exports.GQLvalidation = exports.validation = void 0;
 const exptions_1 = require("../common/exptions");
 const validation = (schema) => {
     return (req, res, next) => {
@@ -8,6 +8,12 @@ const validation = (schema) => {
         for (const key of Object.keys(schema)) {
             if (!schema[key])
                 continue;
+            if (req.file) {
+                req.body.file = req.file;
+            }
+            if (req.files) {
+                req.body.files = req.files;
+            }
             const validationResult = schema[key].safeParse(req[key]);
             if (!validationResult.success) {
                 const error = validationResult.error;
@@ -27,3 +33,15 @@ const validation = (schema) => {
     };
 };
 exports.validation = validation;
+const GQLvalidation = async (schema, args) => {
+    const validationResult = schema.safeParse(args);
+    if (!validationResult.success) {
+        throw (0, exptions_1.mapGeaphQLError)(new exptions_1.BadRequestExpetions("validation error", {
+            issues: validationResult.error.issues.map((issue) => {
+                return { path: issue.path, message: issue.message };
+            }),
+        }));
+    }
+    return true;
+};
+exports.GQLvalidation = GQLvalidation;

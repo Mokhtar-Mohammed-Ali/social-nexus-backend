@@ -7,7 +7,11 @@ interface IError extends Error {
    
  
 }
- const globalErrorHandler = (error: IError, req: Request, res: Response, next: NextFunction) => {
+export const globalErrorHandler = (error: IError, req: Request, res: Response, next: NextFunction) =>
+     {
+        if(error.name == "MulterError"){
+            error.status = 400;
+        }
     const status = error.status || 500;
         return res.status(status).json({ message: error.message || "Internal Server Error" ,
 cause: error.cause || null,

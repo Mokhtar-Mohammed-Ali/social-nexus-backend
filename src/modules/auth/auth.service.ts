@@ -18,6 +18,9 @@ import {
 } from "../../common/utils/security";
 import {
   emailEvent,
+ 
+  NotificationService,
+ 
   Redisservices,
   redisServices,
   sendEmail,
@@ -29,17 +32,22 @@ import { createNumberOtp } from "../../common/utils";
 import { IloginResponse } from "./auth.entity";
 import { WEB_CLIENT_ID } from "../../config/config.service";
 import { OAuth2Client, TokenPayload } from "google-auth-library";
+import { NotificationRepository } from "../../DB/DataBaseRepository/notification.repository";
 
 class AuthService {
   private readonly userRepository: userRepository;
+  private readonly notificationRepository: NotificationRepository;
   private readonly redis: Redisservices;
   private readonly tokenService: TokenService;
+  private readonly notificationService: NotificationService;
   // private readonly securityService: SecurityService
   constructor() {
     this.userRepository = new userRepository();
+    this.notificationRepository = new NotificationRepository();
     // this.securityService = new SecurityService();
     this.redis = redisServices;
     this.tokenService = new TokenService();
+    this.notificationService = new NotificationService();
   }
 
   //send otp
@@ -201,7 +209,7 @@ class AuthService {
     inputs: IloginDto,
     issuer: string,
   ): Promise<IloginResponse> {
-    const { email, password } = inputs;
+    const { email, password, Fcm } = inputs;
 
     const isBlockedSeconds = await this.redis.ttl(
       this.redis.loginBlockKey({ email }),
@@ -247,6 +255,31 @@ class AuthService {
       // return { message: "2FA OTP sent to your email", secondStep: true };
     }
     // return await this.tokenService.sign({ payload: { sub: user._id } });
+
+    if (Fcm) {
+      await this.redis.addFCM(user._id, Fcm);
+      const tokens = await this.redis.getFCMs(user._id);
+      if (tokens.length) {
+        await this.notificationService.sendNotifications({
+          tokens,
+          data: {
+            title: "Login Notification",
+            body: "You have successfully logged in to your account.",
+          },
+        });
+
+        await this.notificationRepository.create({
+  data: {
+    title: "Login Notification",
+    body: "You have successfully logged in to your account.",
+    sender: user._id,
+    receiver: user._id,
+    type: "SYSTEM",
+    isRead: false,
+  },
+});
+      }
+    }
     return await this.tokenService.createloginCredentials(user, issuer);
   }
 

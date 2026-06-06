@@ -232,5 +232,31 @@ export class Redisservices {
   //   }
   //   return status;
   // };
+
+  // notification
+  
+Fcm_key(userId: Types.ObjectId | string) {
+    return `user:FCM:${userId.toString()}`;
+}
+ async addFCM(userId:Types.ObjectId | string, FCMToken:string) {
+    return await this.client.sAdd(this.Fcm_key(userId), FCMToken);
+}
+
+ async removeFCM(userId:Types.ObjectId | string, FCMToken:string) {
+    return await this.client.sRem(this.Fcm_key(userId), FCMToken);
+}
+
+ async getFCMs(userId:Types.ObjectId | string) {
+    return await this.client.sMembers(this.Fcm_key(userId));
+}
+
+ async hasFCMs(userId:Types.ObjectId | string) {
+    return await this.client.sCard(this.Fcm_key(userId));
+}
+
+ async removeFCMUser(userId:Types.ObjectId | string) {
+    return await this.client.del(this.Fcm_key(userId));
+}
+
 }
 export const redisServices = new Redisservices();
