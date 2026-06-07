@@ -1,5 +1,7 @@
 node_modules/
-config/.env.development
-config/.env.production
-.env.development
-.env.production
+*.env
+*.env.development
+*.env.production
+*.json
+.vscode/
+dist/
