@@ -20,6 +20,7 @@ import {
 } from "../../common/services";
 import { ConflictException } from "../../common/exptions";
 import {
+  ChatEnum,
   emailEnum,
   LOGOUTENUM,
   MulterStorage,
@@ -33,29 +34,40 @@ import { createNumberOtp } from "../../common/utils";
 import { Types } from "mongoose";
 import { DeleteResult } from "mongoose";
 import dayjs from "dayjs";
+import { ChatRepository } from "../../DB/DataBaseRepository/chat.repository.";
+import { IChat } from "../../common/interfaces/chat.interface";
 
 export class UserService {
   private readonly redis: Redisservices;
   private readonly tokenService: TokenService;
   private readonly userRepository: userRepository;
   private readonly s3: S3Service;
-
+  private chatRepository: ChatRepository;
   constructor() {
     this.userRepository = new userRepository();
     this.redis = redisServices;
     this.tokenService = new TokenService();
     this.s3 = s3Service;
+      this.chatRepository = new ChatRepository();
   }
 
   // async profile(user: HydratedDocument<IUser>): Promise<any> {
   //   return user.toJSON();
   // }
   // with graphQL
-   async profile(user: HydratedDocument<IUser>): Promise<IUser> {
+   async profile(user: HydratedDocument<IUser>): Promise<{user:IUser,groups:HydratedDocument<IChat>[]}> {
 //  await this.userRepository.findOne({
 
 // options:{populate:[{path:"friends"}]}})as HydratedDocument<IUser>;
-    return user.toJSON()
+const groups=await this.chatRepository.find({
+  filter:{
+    type:ChatEnum.ovm,
+    participants:{
+      $in:[user._id]
+    }
+  }
+})
+    return {user:user.toJSON(),groups}
   }
 
   async rotateToken(

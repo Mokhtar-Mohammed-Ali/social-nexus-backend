@@ -1,20 +1,30 @@
+import { authorization } from "./middlware/authorization.middleware";
 import { successResponse } from "./common/response/success.response";
 // import { globalErrorHandling, sendEmail } from "./common/utils/index.js";
 // import { redisConnection, connectionDB, redisClient } from "./DB/index.js";
 import express from "express";
 import type { Express, Request, Response } from "express";
 import cors from "cors";
-import { authRouter, postRouter, schema, UserRouter } from "./modules";
+import { authRouter, postRouter, realTimeGateWay, schema, UserRouter } from "./modules";
 import globalErrorHandler from "./middlware/error.middleware";
 import { port } from "./config/config.service";
 import { connectionDB } from "./DB/connection.db";
-import { redisServices, s3Service } from "./common/services";
+import {
+  Redisservices,
+  redisServices,
+  s3Service,
+  TokenService,
+} from "./common/services";
 import { pipeline } from "node:stream";
 import { promisify } from "node:util";
 import accountCleanupJob from "./common/jobs/account-cleanup.job";
 import { commentRouter } from "./modules/comment";
 import { createHandler } from "graphql-http/lib/use/express";
 import { authentication } from "./middlware";
+import { Server, Socket } from "socket.io";
+import { Server as HttpServer } from "node:http";
+import { IAuthSocket } from "./common/types/express.types";
+import { chateRouter } from "./modules/chat";
 // import { globalErrorHandling } from "./middlware";
 // import { resolve } from "path";
 // import helmet from "helmet";
@@ -117,7 +127,6 @@ async function bootstrap(): Promise<void> {
   await connectionDB();
   await redisServices.connect();
 
-
   //test notif
 
   //application routing
@@ -133,18 +142,25 @@ async function bootstrap(): Promise<void> {
   //   return successResponse({ res, message: "Notification sent successfully" });
   // });
 
-// check if route is right or not
-app.all("/graphql", authentication(),createHandler({schema:schema,context:(req)=>({user:req.raw.user,decoded:req.raw.decoded})}))
-app.use((req, res, next) => {
-  console.log(`Incoming request: ${req.method} ${req.url}`);
-  next();
-});
+  // check if route is right or not
+  app.all(
+    "/graphql",
+    authentication(),
+    createHandler({
+      schema: schema,
+      context: (req) => ({ user: req.raw.user, decoded: req.raw.decoded }),
+    }),
+  );
+  app.use((req, res, next) => {
+    console.log(`Incoming request: ${req.method} ${req.url}`);
+    next();
+  });
 
-
-    app.use("/post/:postId/comments", commentRouter);
+  app.use("/post/:postId/comments", commentRouter);
   app.use("/auth", authRouter);
   app.use("/user", UserRouter);
   app.use("/post", postRouter);
+  app.use("/chat", chateRouter);
 
   // get file from s3 and download it or view it in the browser
   app.get(
@@ -197,8 +213,8 @@ app.use((req, res, next) => {
       return successResponse({ res, data: { url } });
     },
   );
-// cleanup account job
-accountCleanupJob.start();
+  // cleanup account job
+  accountCleanupJob.start();
   // app.use("/message", messageRouter);
 
   //invalid routing
@@ -209,6 +225,9 @@ accountCleanupJob.start();
   //error-handling
   app.use(globalErrorHandler);
 
-  app.listen(port, () => console.log(`Example app listening on port ${port}!`));
+  const httpServer: HttpServer = app.listen(port, () =>
+    console.log(`Example app listening on port ${port}!`),
+  );
+ realTimeGateWay.initializeIo(httpServer)
 }
 export default bootstrap;

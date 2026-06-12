@@ -22,6 +22,7 @@ import { getAvailability } from "../../common/utils/post.utils";
 import { paginateDto } from "../../common/utils";
 import { toObjectId } from "../../common/utils/objectId";
 import { PopulateOptions } from "mongoose";
+import { RealTimeGaeWay, realTimeGateWay } from "../realTime";
 
 export class PostService {
   private populate: PopulateOptions[] = [
@@ -36,8 +37,10 @@ export class PostService {
   private readonly redis: Redisservices;
   private readonly notification: NotificationService;
   private readonly s3: S3Service;
+  private realTime: RealTimeGaeWay;
   constructor() {
     this.userRepository = new userRepository();
+    this.realTime = realTimeGateWay;
     this.PostRepository = new PostRepository();
     // this.notificationRepository = new NotificationRepository();
     this.redis = redisServices;
@@ -203,7 +206,14 @@ export class PostService {
     if (!post) {
       throw new NotFoundExpetions("post not found");
     }
-
+    const owner = post.createdBy as HydratedDocument<IUser>;
+    const socketIds = await this.redis.getSockets(owner._id);
+    if (socketIds.length & Number(reaction) || 0 > 0) {
+      this.realTime
+        .getIo()
+        .to(socketIds)
+        .emit("likePost", { postId, userId: user._id, reaction });
+    }
     return post.toJSON();
   }
 

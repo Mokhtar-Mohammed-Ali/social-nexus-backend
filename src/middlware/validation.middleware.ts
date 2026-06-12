@@ -1,3 +1,4 @@
+import { Socket } from 'socket.io';
 import { NextFunction, Request, Response } from "express";
 import { BadRequestExpetions, mapGeaphQLError } from "../common/exptions";
 import { ZodError, ZodType } from "zod";
@@ -45,6 +46,19 @@ export const validation = (schema: scchemaType) => {
   };
 };
 
+export const Socketvalidation = async <T>(schema: ZodType, args: T) :Promise<boolean>=> {
+  const validationResult = schema.safeParse(args);
+  if (!validationResult.success) {
+    throw new BadRequestExpetions("validation error", {
+        issues: validationResult.error.issues.map((issue) => {
+          return { path: issue.path, message: issue.message };
+        }),
+      });
+    }
+    
+
+  return true
+};
 export const GQLvalidation = async <T>(schema: ZodType, args: T) :Promise<boolean>=> {
   const validationResult = schema.safeParse(args);
   if (!validationResult.success) {

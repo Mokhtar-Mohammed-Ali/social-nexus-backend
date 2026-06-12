@@ -11,8 +11,11 @@ import {
   fileFieldValidation,
 } from "../../common/utils/multer";
 import { userService } from "./user.sevice";
+import { chateRouter } from "../chat";
 
 const router = Router();
+// chat
+router.use("/:userId/chat", chateRouter);
 // profile
 router.get(
   "/",
@@ -105,15 +108,19 @@ router.patch(
 );
 
 // hard delete account route
-router.delete("/hard-delete", authentication(), async (req: Request, res: Response) => {
-  const data = await userService.hardDeleteAccount(req.user._id);
+router.delete(
+  "/hard-delete",
+  authentication(),
+  async (req: Request, res: Response) => {
+    const data = await userService.hardDeleteAccount(req.user._id);
 
-  return successResponse({
-    res,
-    message: "Account deleted successfully",
-    data,
-  });
-});
+    return successResponse({
+      res,
+      message: "Account deleted successfully",
+      data,
+    });
+  },
+);
 
 // softdelete account route
 router.delete("/", authentication(), async (req: Request, res: Response) => {
@@ -160,7 +167,7 @@ router.patch(
 //upload profile image with presigned url
 router.patch(
   "/profile-image-presigned",
- 
+
   authentication(),
   async (req: Request, res: Response) => {
     const data = await userService.profileImagePresigned(req.body, req.user);
